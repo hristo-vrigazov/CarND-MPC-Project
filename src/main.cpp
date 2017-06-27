@@ -120,6 +120,7 @@ int main() {
           double ep_rotated_perspective = -atan(coeffs[1]);
 
           // State vector
+          // Simplified version of the update equations available in README.md
           double latency_x = v * dt;
           double latency_y = 0;
           double latency_psi = -v * steer_value / Lf * dt;

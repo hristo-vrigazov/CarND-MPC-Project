@@ -5,8 +5,8 @@ Self-Driving Car Engineer Nanodegree Program
 
 ## The model
 
-An example run can be found [here](https://youtu.be/kLGovfwS8E4)
-The model used in this project is called kinematic bicycle model.
+An example run can be found [here](https://youtu.be/R7743j4dtUY)
+The model used in this project is kinematic bicycle model. It consists of:
 
 ### State
 The state is represented by:
@@ -25,6 +25,36 @@ The state is represented by:
 The update equations are the following (standard equations used in the Udacity lesson):
 
 ![alt image](update_equations.png)
+
+### Timestep Length and Elapsed Duration
+
+The values chosen are `N = 12` and `dt = 0.2`. Setting the `dt` value too low (0.05 and 0.02 e.g.)
+cause the car to wiggle too much. Setting it too high causes the car to not update fast enough. 
+Setting `N` too low causes "myopic" behavior of the car, setting `N` too high uses too much resources.
+
+### Polynomial Fitting and MPC Preprocessing
+
+Once the waypoints from the simulator are received, they are converted to car's perspective:
+```
+Eigen::VectorXd ptsx_rotated_perspective(ptsx.size());
+Eigen::VectorXd ptsy_rotated_perspective(ptsy.size());
+
+for (unsigned i = 0; i < ptsx.size(); i++ ) {
+    ptsx_rotated_perspective[i] = ((ptsx[i] - px) * cos(-psi) - (ptsy[i] - py) * sin(-psi));
+    ptsy_rotated_perspective[i] = ((ptsx[i] - px) * sin(-psi) + (ptsy[i] - py) * cos(-psi));
+}
+```
+before fitting a polynomial:
+```
+auto coeffs = polyfit(ptsx_rotated_perspective, ptsy_rotated_perspective, 3);
+```
+
+The rotated perspective points are then used to get the errors (cte and epsi).
+
+### Dealing with latency
+
+The model is able to successfully navigate around the track, even though there is 100ms latency
+when applying control. The reason is that the state after 100ms is estimated and then passed to the solver.
 
 ## Dependencies
 
