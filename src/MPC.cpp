@@ -21,10 +21,8 @@ double dt = 0.1;
 // This is the length from front to CoG that has a similar radius.
 const double Lf = 2.67;
 
-// Both the reference cross track and orientation errors are 0.
+// Both the reference cross track and orientation errors are 0, so we won't include them
 // The reference velocity is set to 60 mph.
-double ref_cte = 0;
-double ref_epsi = 0;
 double v_ref = 60.0;
 
 
@@ -55,26 +53,20 @@ public:
 
     fg[0] = 0;
 
-    // The part of the cost based on the reference state.
     for (int i = 0; i < N; i++) {
-      fg[0] += 1500*CppAD::pow(vars[cte_start + i] - ref_cte, 2);
-      fg[0] += 1200*CppAD::pow(vars[epsi_start + i] - ref_epsi, 2);
+      fg[0] += 1700 * CppAD::pow(vars[cte_start + i], 2);
+      fg[0] += 1100 * CppAD::pow(vars[epsi_start + i], 2);
       fg[0] += CppAD::pow(vars[v_start + i] - v_ref, 2);
     }
 
-    // Reference State Cost
-    // Minimize the use of actuators.
     for (int i = 0; i < N - 1; i++) {
-      fg[0] += 1*CppAD::pow(vars[delta_start + i], 2);
-      fg[0] += 1*CppAD::pow(vars[a_start + i], 2);
+      fg[0] += CppAD::pow(vars[delta_start + i], 2);
+      fg[0] += CppAD::pow(vars[a_start + i], 2);
     }
 
-    // TODO: Define the cost related the reference state and
-    // any anything you think may be beneficial.
-    // Minimize the value gap between sequential actuations.
     for (int i = 0; i < N - 2; i++) {
-      fg[0] += 5 * CppAD::pow(vars[delta_start + i + 1] - vars[delta_start + i], 2);
-      fg[0] += 1 * CppAD::pow(vars[a_start + i + 1] - vars[a_start + i], 2);
+      fg[0] += 9 * CppAD::pow(vars[delta_start + i + 1] - vars[delta_start + i], 2);
+      fg[0] += CppAD::pow(vars[a_start + i + 1] - vars[a_start + i], 2);
     }
 
     //
