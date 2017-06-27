@@ -5,8 +5,7 @@ Self-Driving Car Engineer Nanodegree Program
 
 ## The model
 
-An example run can be found [here]([https://youtu.be/kLGovfwS8E4]
-)
+An example run can be found [here](https://youtu.be/kLGovfwS8E4)
 The model used in this project is called kinematic bicycle model.
 
 ### State
@@ -24,6 +23,7 @@ The state is represented by:
 
 ### Update equations
 The update equations are the following (standard equations used in the Udacity lesson):
+
 ![alt image](update_equations.png)
 
 ## Dependencies
