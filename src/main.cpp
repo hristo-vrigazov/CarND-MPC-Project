@@ -137,8 +137,8 @@ int main() {
 
           auto solution_coefficients = mpc.Solve(state, coeffs);
 
-          steer_value = solution_coefficients[solution_coefficients.size() - 2];
-          throttle_value = solution_coefficients[solution_coefficients.size() - 1];
+          steer_value = solution_coefficients[0];
+          throttle_value = solution_coefficients[1];
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
@@ -150,7 +150,7 @@ int main() {
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
-          for (unsigned i = 0; i < solution_coefficients.size() - 2; i += 2){
+          for (unsigned i = 2; i < solution_coefficients.size(); i += 2) {
             mpc_x_vals.push_back(solution_coefficients[i]);
             mpc_y_vals.push_back(solution_coefficients[i + 1]);
           }

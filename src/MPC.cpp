@@ -6,8 +6,8 @@
 using CppAD::AD;
 
 // TODO: Set the timestep length and duration
-size_t N = 0;
-double dt = 0;
+size_t N = 20;
+double dt = 0.1;
 
 // This value assumes the model presented in the classroom is used.
 //
@@ -22,7 +22,11 @@ double dt = 0;
 const double Lf = 2.67;
 
 // Both the reference cross track and orientation errors are 0.
-double v_ref = 20;
+// The reference velocity is set to 60 mph.
+double ref_cte = 0;
+double ref_epsi = 0;
+double v_ref = 60.0;
+
 
 // The solver takes all the state variables and actuator
 // variables in a singular vector. Thus, we should to establish
@@ -37,7 +41,7 @@ size_t delta_start = epsi_start + N;
 size_t a_start = delta_start + N - 1;
 
 class FG_eval {
- public:
+public:
   // Fitted polynomial coefficients
   Eigen::VectorXd coeffs;
   FG_eval(Eigen::VectorXd coeffs) { this->coeffs = coeffs; }
@@ -48,11 +52,30 @@ class FG_eval {
     // `fg` a vector of the cost constraints, `vars` is a vector of variable values (state & actuators)
     // NOTE: You'll probably go back and forth between this function and
     // the Solver function below.
+
     fg[0] = 0;
 
+    // The part of the cost based on the reference state.
+    for (int i = 0; i < N; i++) {
+      fg[0] += 1500*CppAD::pow(vars[cte_start + i] - ref_cte, 2);
+      fg[0] += 1200*CppAD::pow(vars[epsi_start + i] - ref_epsi, 2);
+      fg[0] += CppAD::pow(vars[v_start + i] - v_ref, 2);
+    }
+
     // Reference State Cost
+    // Minimize the use of actuators.
+    for (int i = 0; i < N - 1; i++) {
+      fg[0] += 1*CppAD::pow(vars[delta_start + i], 2);
+      fg[0] += 1*CppAD::pow(vars[a_start + i], 2);
+    }
+
     // TODO: Define the cost related the reference state and
     // any anything you think may be beneficial.
+    // Minimize the value gap between sequential actuations.
+    for (int i = 0; i < N - 2; i++) {
+      fg[0] += 5 * CppAD::pow(vars[delta_start + i + 1] - vars[delta_start + i], 2);
+      fg[0] += 1 * CppAD::pow(vars[a_start + i + 1] - vars[a_start + i], 2);
+    }
 
     //
     // Setup Constraints
@@ -72,12 +95,29 @@ class FG_eval {
     fg[1 + epsi_start] = vars[epsi_start];
 
     // The rest of the constraints
-    for (int t = 1; t < N; t++) {
-      AD<double> x1 = vars[x_start + t];
+    for (int t = 0; t < N - 1; t++) {
+      // t + 1
+      AD<double> x_t_1 = vars[x_start + t + 1];
+      AD<double> y_t_1 = vars[y_start + t + 1];
+      AD<double> psi_t_1 = vars[psi_start + t + 1];
+      AD<double> v_t_1 = vars[v_start + t + 1];
+      AD<double> cte_t_1 = vars[cte_start + t + 1];
+      AD<double> epsi_t_1 = vars[epsi_start + t + 1];
 
-      AD<double> x0 = vars[x_start + t - 1];
-      AD<double> psi0 = vars[psi_start + t - 1];
-      AD<double> v0 = vars[v_start + t - 1];
+      // t
+      AD<double> x_t = vars[x_start + t];
+      AD<double> y_t = vars[y_start + t];
+      AD<double> psi_t = vars[psi_start + t];
+      AD<double> v_t = vars[v_start + t];
+      AD<double> cte_t = vars[cte_start + t];
+      AD<double> epsi_t = vars[epsi_start + t];
+
+      // Only consider the actuation at time t.
+      AD<double> delta_t = vars[delta_start + t];
+      AD<double> a_t = vars[a_start + t];
+
+      AD<double> f_t = coeffs[0] + coeffs[1] * x_t + coeffs[2] * x_t * x_t + coeffs[3] * x_t * x_t * x_t;
+      AD<double> psides_t =  CppAD::atan(coeffs[1] + 2.0 * coeffs[2] * x_t + 3.0 * coeffs[3] * x_t * x_t);
 
       // Here's `x` to get you started.
       // The idea here is to constraint this value to be 0.
@@ -87,7 +127,15 @@ class FG_eval {
       // these to the solver.
 
       // TODO: Setup the rest of the model constraints
-      fg[1 + x_start + t] = x1 - (x0 + v0 * CppAD::cos(psi0) * dt);
+
+      fg[2 + x_start + t] = x_t_1 - (x_t + v_t * CppAD::cos(psi_t) * dt);
+      fg[2 + y_start + t] = y_t_1 - (y_t + v_t * CppAD::sin(psi_t) * dt);
+      fg[2 + psi_start + t] = psi_t_1 - (psi_t - v_t * delta_t / Lf * dt);
+      fg[2 + v_start + t] = v_t_1 - (v_t + a_t * dt);
+      fg[2 + cte_start + t] =
+        cte_t_1 - ((f_t - y_t) + (v_t * CppAD::sin(epsi_t) * dt));
+      fg[2 + epsi_start + t] =
+        epsi_t_1 - ((psi_t - psides_t) - v_t * delta_t / Lf * dt);
     }
   }
 };
@@ -99,8 +147,6 @@ MPC::MPC() {}
 MPC::~MPC() {}
 
 vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
-  bool ok = true;
-  size_t i;
   typedef CPPAD_TESTVECTOR(double) Dvector;
 
   // TODO: Set the number of model variables (includes both states and inputs).
@@ -149,14 +195,14 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   // The upper and lower limits of delta are set to -25 and 25
   // degrees (values in radians).
   // NOTE: Feel free to change this to something else.
-  for (int i = delta_start; i < a_start; i++) {
+  for (size_t i = delta_start; i < a_start; i++) {
     vars_lowerbound[i] = -0.436332;
     vars_upperbound[i] = 0.436332;
   }
 
   // Acceleration/decceleration upper and lower limits.
   // NOTE: Feel free to change this to something else.
-  for (int i = a_start; i < n_vars; i++) {
+  for (size_t i = a_start; i < n_vars; i++) {
     vars_lowerbound[i] = -1.0;
     vars_upperbound[i] = 1.0;
   }
@@ -201,15 +247,21 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
     options, vars, vars_lowerbound, vars_upperbound, constraints_lowerbound,
     constraints_upperbound, fg_eval, solution);
 
-  //
-  // Check some of the solution values
-  //
-  ok &= solution.status == CppAD::ipopt::solve_result<Dvector>::success;
-
   auto cost = solution.obj_value;
   std::cout << "Cost " << cost << std::endl;
-  return {solution.x[x_start + 1],   solution.x[y_start + 1],
-          solution.x[psi_start + 1], solution.x[v_start + 1],
-          solution.x[cte_start + 1], solution.x[epsi_start + 1],
-          solution.x[delta_start],   solution.x[a_start]};
+
+
+  // Construct result
+  vector<double> res;
+
+  res.push_back(solution.x[delta_start]);
+  res.push_back(solution.x[a_start]);
+
+  for(unsigned t = 1; t < N; t++){
+    res.push_back(solution.x[x_start + t]);
+    res.push_back(solution.x[y_start + t]);
+  }
+
+
+  return res;
 }
