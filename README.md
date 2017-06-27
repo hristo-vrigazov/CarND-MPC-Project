@@ -3,6 +3,29 @@ Self-Driving Car Engineer Nanodegree Program
 
 ---
 
+## The model
+
+An example run can be found [here]([https://youtu.be/kLGovfwS8E4]
+)
+The model used in this project is called kinematic bicycle model.
+
+### State
+The state is represented by:
+* x - the x coordinate of the car
+* y - the y coordinate of the car
+* psi - orientation of the car
+* velocity - the velocity of the car
+* cte - cross track error
+* epsi - orientation error
+
+### Actuators
+* steering angle
+* throttle
+
+### Update equations
+The update equations are the following (standard equations used in the Udacity lesson):
+![alt image](update_equations.png)
+
 ## Dependencies
 
 * cmake >= 3.5
