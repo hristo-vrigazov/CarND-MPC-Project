@@ -65,6 +65,9 @@ Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
   return result;
 }
 
+const double dt = 0.1;
+const double Lf = 2.67;
+
 int main() {
   uWS::Hub h;
 
@@ -98,21 +101,59 @@ int main() {
           * Both are in between [-1, 1].
           *
           */
-          double steer_value;
-          double throttle_value;
+          Eigen::VectorXd ptsx_rotated_perspective(ptsx.size());
+          Eigen::VectorXd ptsy_rotated_perspective(ptsy.size());
+
+          for (unsigned i = 0; i < ptsx.size(); i++ ) {
+            ptsx_rotated_perspective[i] = ((ptsx[i] - px) * cos(-psi) - (ptsy[i] - py) * sin(-psi));
+            ptsy_rotated_perspective[i] = ((ptsx[i] - px) * sin(-psi) + (ptsy[i] - py) * cos(-psi));
+          }
+
+          double steer_value = j[1]["steering_angle"];
+          double throttle_value = j[1]["throttle"];
+
+          // Once we have turned the points from a car's perspective, we can fit the polynomial
+          auto coeffs = polyfit(ptsx_rotated_perspective, ptsy_rotated_perspective, 3);
+
+          // Get errors in the rotated perspective
+          double cte_rotated_perspective = polyeval(coeffs, 0);
+          double ep_rotated_perspective = -atan(coeffs[1]);
+
+          // State vector
+          double latency_x = v * dt;
+          double latency_y = 0;
+          double latency_psi = -v * steer_value / Lf * dt;
+          double latency_v = v + throttle_value * dt;
+          double latency_cte = cte_rotated_perspective + v * sin(ep_rotated_perspective) * dt;
+          double latency_epsi = ep_rotated_perspective - v * steer_value /Lf * dt;
+
+          Eigen::VectorXd state(6);
+          state << latency_x,
+            latency_y,
+            latency_psi,
+            latency_v,
+            latency_cte,
+            latency_epsi;
+
+          auto solution_coefficients = mpc.Solve(state, coeffs);
+
+          steer_value = solution_coefficients[solution_coefficients.size() - 2];
+          throttle_value = solution_coefficients[solution_coefficients.size() - 1];
 
           json msgJson;
-          // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
-          // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
           msgJson["steering_angle"] = steer_value;
           msgJson["throttle"] = throttle_value;
 
-          //Display the MPC predicted trajectory 
+          //Display the MPC predicted trajectory
           vector<double> mpc_x_vals;
           vector<double> mpc_y_vals;
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
+          for (unsigned i = 0; i < solution_coefficients.size() - 2; i += 2){
+            mpc_x_vals.push_back(solution_coefficients[i]);
+            mpc_y_vals.push_back(solution_coefficients[i + 1]);
+          }
 
           msgJson["mpc_x"] = mpc_x_vals;
           msgJson["mpc_y"] = mpc_y_vals;
@@ -123,6 +164,10 @@ int main() {
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
+          for(unsigned i = 0; i < ptsx.size(); i++) {
+            next_x_vals.push_back(ptsx_rotated_perspective[i]);
+            next_y_vals.push_back(ptsy_rotated_perspective[i]);
+          }
 
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
